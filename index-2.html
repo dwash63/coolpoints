@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f0f14">
+<title>Cool Points</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:#0f0f14; color:#fff; font-family:sans-serif; padding:20px 16px 90px; }
+  h1 { margin:0 0 4px; font-size:28px; }
+  h2 { font-size:18px; margin:24px 0 10px; }
+  .sub { color:#888; margin:0 0 20px; }
+  input, textarea { width:100%; padding:14px; border-radius:10px; border:none; font-size:16px; margin-bottom:10px; background:#fff; color:#111; }
+  button { width:100%; padding:15px; border:none; border-radius:12px; font-size:17px; font-weight:bold; margin-bottom:10px; color:#fff; background:#2a2a35; }
+  .main { background:#38e8a0; color:#0f0f14; }
+  .ghost { background:none; color:#888; font-size:15px; }
+  .card { background:#1b1b24; border-radius:16px; padding:20px; margin-bottom:14px; }
+  .score { font-size:72px; font-weight:900; color:#38e8a0; line-height:1; }
+  .muted { color:#888; font-size:14px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .item { background:#1b1b24; border-radius:12px; padding:14px; margin-bottom:8px; }
+  .item b { color:#38e8a0; }
+  .pick { text-align:left; background:#1b1b24; }
+  .amounts { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+  .amounts button { margin:0; padding:12px 0; font-size:16px; }
+  .amounts button.on { background:#38e8a0; color:#0f0f14; }
+  #qr { background:#fff; padding:12px; border-radius:12px; width:fit-content; margin:12px auto; }
+  #toast { position:fixed; left:16px; right:16px; bottom:84px; background:#38e8a0; color:#0f0f14; padding:14px; border-radius:12px; font-weight:bold; text-align:center; }
+  #toast.err { background:#e85a5a; color:#fff; }
+  nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#16161e; border-top:1px solid #2a2a35; }
+  nav button { flex:1; margin:0; border-radius:0; background:none; color:#888; font-size:14px; padding:14px 0 18px; }
+  nav button.on { color:#38e8a0; }
+  .rank { color:#888; width:28px; }
+</style>
+</head>
+<body>
+  <h1>😎 Cool Points</h1>
+  <p class="sub">Had a good interaction? Send some cool points.</p>
+
+  <!-- SIGN IN -->
+  <section id="vAuth" hidden>
+    <input id="email" type="email" placeholder="Email" autocomplete="email">
+    <input id="pass" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+    <button class="main" id="btnIn">Sign in</button>
+    <button id="btnUp">Create account</button>
+    <button class="ghost" id="btnReset">Forgot password?</button>
+  </section>
+
+  <!-- PICK USERNAME -->
+  <section id="vSetup" hidden>
+    <div class="card">
+      <b>Pick your username</b>
+      <p class="muted">3–20 letters, numbers, or underscores. This is how people find you.</p>
+      <input id="uname" placeholder="username" autocapitalize="off" autocorrect="off">
+      <input id="ubio" placeholder="Short bio (optional)" maxlength="100">
+      <button class="main" id="btnSave">Let's go ➜</button>
+    </div>
+  </section>
+
+  <!-- ME -->
+  <section id="vMe" hidden>
+    <div class="card" style="text-align:center">
+      <div class="muted">@<span id="meName"></span></div>
+      <div class="score" id="meScore">50</div>
+      <div class="muted">Cool Score</div>
+      <p id="meStats" class="muted"></p>
+      <p id="meBio"></p>
+    </div>
+    <div class="card" style="text-align:center">
+      <b>Your QR code</b>
+      <p class="muted">People scan this with their camera to send you points.</p>
+      <div id="qr"></div>
+      <button id="btnShare">📤 Share my link</button>
+    </div>
+    <h2>Points you've received</h2>
+    <div id="meList"></div>
+    <button class="ghost" id="btnOut">Sign out</button>
+  </section>
+
+  <!-- GIVE -->
+  <section id="vGive" hidden>
+    <div class="card"><div class="row"><span>Points left today</span><b id="left" style="font-size:24px;color:#38e8a0">100</b></div>
+      <div class="muted">Resets at midnight (Central).</div></div>
+    <div id="searchBox">
+      <input id="q" placeholder="Search a username..." autocapitalize="off" autocorrect="off">
+      <div id="results"></div>
+    </div>
+    <div id="givePanel" hidden>
+      <div class="card">
+        <div class="row"><div><b style="font-size:20px">@<span id="gName"></span></b><div class="muted" id="gBio"></div></div>
+          <div style="text-align:right"><div style="font-size:32px;font-weight:900;color:#38e8a0" id="gScore"></div><div class="muted">Cool Score</div></div></div>
+      </div>
+      <div class="amounts" id="amounts"></div>
+      <input id="amt" type="number" min="1" max="100" inputmode="numeric" placeholder="Or type an amount">
+      <input id="note" maxlength="140" placeholder="What made them cool? (optional)">
+      <button class="main" id="btnSend">Send cool points 😎</button>
+      <button class="ghost" id="btnCancel">← Pick someone else</button>
+    </div>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <section id="vTop" hidden>
+    <p class="muted">Your Cool Score (1–100) shows how you rank against everyone on the app, based on points from the last 30 days. 50 = right in the middle. 100 = coolest person on the app.</p>
+    <div id="topList"></div>
+  </section>
+
+  <nav id="nav" hidden>
+    <button data-tab="vMe" class="on">😎 Me</button>
+    <button data-tab="vGive">🤝 Give</button>
+    <button data-tab="vTop">🏆 Top</button>
+  </nav>
+
+  <div id="toast" hidden></div>
+
+<script type="module">
+  import { firebaseConfig } from "./config.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+           signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, getDocs, collection, query, where, orderBy, startAt, endAt,
+           limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const $ = id => document.getElementById(id);
+  let me = null;          // { uid, username, bio }
+  let target = null;      // user being given points
+  let leftToday = 100;
+  let pendingGive = null; // username from a QR link
+
+  /* ---------- helpers ---------- */
+  function toast(msg, isErr) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.className = isErr ? "err" : "";
+    t.hidden = false;
+    clearTimeout(t._h);
+    t._h = setTimeout(() => t.hidden = true, 3000);
+  }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  // Must match the rules: today's date in Central time (UTC-5), like 2026-10-13
+  function today() {
+    const d = new Date(Date.now() - 5 * 3600 * 1000);
+    return d.getUTCFullYear() + "-" + (d.getUTCMonth() + 1) + "-" + d.getUTCDate();
+  }
+
+  // Cool Score (1-100) = where you rank vs. everyone on the app,
+  // based on points received in the last 30 days. 50 = right in the middle.
+  async function scoreboard() {
+    const [us, gs] = await Promise.all([
+      getDocs(query(collection(db, "users"), limit(5000))),
+      getDocs(query(collection(db, "gives"), limit(5000)))
+    ]);
+    const cutoff = Date.now() / 1000 - 30 * 86400;
+    const P = {};
+    us.docs.forEach(d => P[d.id] = { uid: d.id, name: d.data().username, recent: 0, total: 0, count: 0 });
+    gs.docs.forEach(d => {
+      const g = d.data(), p = P[g.to];
+      if (!p) return;
+      p.total += g.amount;
+      p.count++;
+      if (!g.at || g.at.seconds >= cutoff) p.recent += g.amount;
+    });
+    const list = Object.values(P), n = list.length;
+    list.forEach(p => {
+      let below = 0, same = 0;
+      list.forEach(q => { if (q.recent < p.recent) below++; else if (q.recent === p.recent) same++; });
+      p.score = Math.max(1, Math.min(100, Math.round(100 * (below + 0.5 * same) / n)));
+    });
+    return P;
+  }
+
+  function show(view) {
+    ["vAuth", "vSetup", "vMe", "vGive", "vTop"].forEach(v => $(v).hidden = v !== view);
+    $("nav").hidden = !["vMe", "vGive", "vTop"].includes(view);
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === view));
+    if (view === "vMe") loadMe();
+    if (view === "vGive") loadBudget();
+    if (view === "vTop") loadTop();
+  }
+
+  function friendly(e) {
+    const c = (e && e.code) || "";
+    if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found")) return "Wrong email or password.";
+    if (c.includes("email-already-in-use")) return "That email already has an account. Try signing in.";
+    if (c.includes("weak-password")) return "Password needs at least 6 characters.";
+    if (c.includes("invalid-email")) return "That email doesn't look right.";
+    if (c.includes("permission-denied")) return "Not allowed. Check your points left or try again.";
+    return "Something went wrong. Try again.";
+  }
+
+  async function receivedBy(uid) {
+    const snap = await getDocs(query(collection(db, "gives"), where("to", "==", uid)));
+    const list = snap.docs.map(d => d.data());
+    list.sort((a, b) => ((b.at && b.at.seconds) || 0) - ((a.at && a.at.seconds) || 0));
+    return { list };
+  }
+
+  window.addEventListener("unhandledrejection", ev => {
+    const c = (ev.reason && ev.reason.code) || "";
+    toast(c.includes("permission-denied") ? "Couldn't load data. Is the database set up?" : "Couldn't load. Check your connection.", true);
+  });
+
+  /* ---------- sign in / up ---------- */
+  $("btnIn").onclick = async () => {
+    try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value); }
+    catch (e) { toast(friendly(e), true); }
+  };
+  $("pass").onkeydown = e => { if (e.key === "Enter") $("btnIn").onclick(); };
+  $("btnUp").onclick = async () => {
+    try { await createUserWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value); }
+    catch (e) { toast(friendly(e), true); }
+  };
+  $("btnReset").onclick = async () => {
+    const em = $("email").value.trim();
+    if (!em) return toast("Type your email first.", true);
+    try { await sendPasswordResetEmail(auth, em); toast("Reset email sent."); }
+    catch (e) { toast(friendly(e), true); }
+  };
+  $("btnOut").onclick = () => signOut(auth);
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) { me = null; show("vAuth"); return; }
+    let snap;
+    try { snap = await getDoc(doc(db, "users", user.uid)); }
+    catch (e) { show("vAuth"); toast("Couldn't load your profile. Try again.", true); return; }
+    if (!snap.exists()) { show("vSetup"); return; }
+    me = { uid: user.uid, ...snap.data() };
+    if (pendingGive) { const u = pendingGive; pendingGive = null; show("vGive"); openByName(u); }
+    else show("vMe");
+  });
+
+  /* ---------- pick username ---------- */
+  $("btnSave").onclick = async () => {
+    const username = $("uname").value.trim();
+    const lower = username.toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(lower)) return toast("3–20 letters, numbers, or _ only.", true);
+    let taken;
+    try { taken = await getDoc(doc(db, "usernames", lower)); }
+    catch (e) { return toast("Couldn't check that name. Try again.", true); }
+    if (taken.exists()) return toast("That username is taken.", true);
+    const uid = auth.currentUser.uid;
+    const b = writeBatch(db);
+    b.set(doc(db, "usernames", lower), { uid });
+    b.set(doc(db, "users", uid), { username, usernameLower: lower, bio: $("ubio").value.trim().slice(0, 100), createdAt: serverTimestamp() });
+    try {
+      await b.commit();
+      me = { uid, username, usernameLower: lower, bio: $("ubio").value.trim() };
+      toast("Welcome, @" + username + "!");
+      if (pendingGive) { const u = pendingGive; pendingGive = null; show("vGive"); openByName(u); }
+      else show("vMe");
+    } catch (e) { toast("Couldn't save. That username may be taken.", true); }
+  };
+
+  /* ---------- me ---------- */
+  function myLink() {
+    return location.origin + location.pathname + "#give=" + encodeURIComponent(me.usernameLower);
+  }
+
+  async function loadMe() {
+    $("meName").textContent = me.username;
+    $("meBio").textContent = me.bio || "";
+    const qr = $("qr");
+    qr.innerHTML = "";
+    if (window.QRCode) new QRCode(qr, { text: myLink(), width: 200, height: 200 });
+    const [r, P] = await Promise.all([receivedBy(me.uid), scoreboard()]);
+    const s = P[me.uid] || { score: 50, recent: 0, total: 0, count: 0 };
+    $("meScore").textContent = s.score;
+    $("meStats").textContent = s.recent + " pts this month · " + s.total + " lifetime from " + s.count + (s.count === 1 ? " interaction" : " interactions");
+    const list = $("meList");
+    list.innerHTML = "";
+    if (!r.list.length) list.appendChild(el("p", "muted", "No points yet. Share your QR code!"));
+    r.list.slice(0, 30).forEach(g => {
+      const it = el("div", "item");
+      const top = el("div", "row");
+      top.appendChild(el("span", "", "@" + g.fromName));
+      top.appendChild(el("b", "", "+" + g.amount));
+      it.appendChild(top);
+      if (g.note) it.appendChild(el("div", "muted", "“" + g.note + "”"));
+      list.appendChild(it);
+    });
+  }
+
+  $("btnShare").onclick = async () => {
+    const link = myLink();
+    try {
+      if (navigator.share) await navigator.share({ title: "Cool Points", text: "Send me some cool points 😎", url: link });
+      else { await navigator.clipboard.writeText(link); toast("Link copied!"); }
+    } catch (e) { /* user closed the share sheet */ }
+  };
+
+  /* ---------- give ---------- */
+  async function loadBudget() {
+    const b = await getDoc(doc(db, "budgets", me.uid + "_" + today()));
+    leftToday = 100 - (b.exists() ? b.data().used : 0);
+    $("left").textContent = leftToday;
+  }
+
+  let searchTimer;
+  $("q").oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 300);
+  };
+
+  async function runSearch() {
+    const q = $("q").value.trim().toLowerCase();
+    const box = $("results");
+    box.innerHTML = "";
+    if (q.length < 1) return;
+    const snap = await getDocs(query(collection(db, "users"), orderBy("usernameLower"), startAt(q), endAt(q + ""), limit(10)));
+    const people = snap.docs.filter(d => d.id !== me.uid);
+    if (!people.length) box.appendChild(el("p", "muted", "No one found."));
+    people.forEach(d => {
+      const b = el("button", "pick", "@" + d.data().username);
+      b.onclick = () => openTarget(d.id, d.data());
+      box.appendChild(b);
+    });
+  }
+
+  async function openByName(name) {
+    const claim = await getDoc(doc(db, "usernames", name.toLowerCase()));
+    if (!claim.exists()) return toast("Couldn't find @" + name, true);
+    const uid = claim.data().uid;
+    if (uid === me.uid) { show("vMe"); return toast("That's your own code 😄"); }
+    const u = await getDoc(doc(db, "users", uid));
+    openTarget(uid, u.data());
+  }
+
+  let chosen = 0;
+  async function openTarget(uid, data) {
+    target = { uid, ...data };
+    await loadBudget();
+    $("searchBox").hidden = true;
+    $("givePanel").hidden = false;
+    $("gName").textContent = data.username;
+    $("gBio").textContent = data.bio || "";
+    $("gScore").textContent = "…";
+    $("note").value = "";
+    $("amt").value = "";
+    pickAmount(Math.min(10, leftToday));
+    const P = await scoreboard();
+    $("gScore").textContent = P[uid] ? P[uid].score : 50;
+  }
+
+  function pickAmount(n) {
+    chosen = n;
+    const box = $("amounts");
+    box.innerHTML = "";
+    [5, 10, 25, 50].forEach(v => {
+      const b = el("button", v === n ? "on" : "", "+" + v);
+      b.disabled = v > leftToday;
+      if (b.disabled) b.style.opacity = 0.3;
+      b.onclick = () => { $("amt").value = ""; pickAmount(v); };
+      box.appendChild(b);
+    });
+  }
+  $("amt").oninput = () => { chosen = parseInt($("amt").value, 10) || 0; pickAmount(chosen); };
+
+  $("btnCancel").onclick = () => {
+    target = null;
+    $("givePanel").hidden = true;
+    $("searchBox").hidden = false;
+  };
+
+  $("btnSend").onclick = async () => {
+    if (!target) return;
+    const amount = chosen;
+    if (!Number.isInteger(amount) || amount < 1) return toast("Pick an amount.", true);
+    if (amount > leftToday) return toast("You only have " + leftToday + " points left today.", true);
+    $("btnSend").disabled = true;
+    try {
+      const day = today();
+      const budgetRef = doc(db, "budgets", me.uid + "_" + day);
+      const bs = await getDoc(budgetRef);
+      const used = bs.exists() ? bs.data().used : 0;
+      if (used + amount > 100) throw { code: "permission-denied" };
+      const b = writeBatch(db);
+      b.set(doc(collection(db, "gives")), {
+        from: me.uid, fromName: me.username, to: target.uid, toName: target.username,
+        amount, note: $("note").value.trim().slice(0, 140), day, at: serverTimestamp()
+      });
+      if (bs.exists()) b.update(budgetRef, { used: used + amount });
+      else b.set(budgetRef, { uid: me.uid, day, used: amount });
+      await b.commit();
+      toast("Sent +" + amount + " cool points to @" + target.username + " 😎");
+      await loadBudget();
+      openTarget(target.uid, target);
+    } catch (e) { toast(friendly(e), true); }
+    $("btnSend").disabled = false;
+  };
+
+  /* ---------- leaderboard ---------- */
+  async function loadTop() {
+    const box = $("topList");
+    box.innerHTML = "";
+    box.appendChild(el("p", "muted", "Loading…"));
+    const P = await scoreboard();
+    const ranked = Object.values(P)
+      .filter(p => p.count > 0)
+      .sort((a, b) => b.score - a.score || b.recent - a.recent || b.total - a.total)
+      .slice(0, 50);
+    box.innerHTML = "";
+    if (!ranked.length) box.appendChild(el("p", "muted", "No points sent yet. Be the first!"));
+    ranked.forEach((p, i) => {
+      const it = el("div", "item row");
+      const left = el("div", "row");
+      left.appendChild(el("span", "rank", "#" + (i + 1)));
+      const who = el("div");
+      who.appendChild(el("div", "", "@" + p.name));
+      who.appendChild(el("div", "muted", p.recent + " pts this month · " + p.total + " lifetime"));
+      left.appendChild(who);
+      it.appendChild(left);
+      it.appendChild(el("b", "", String(p.score)));
+      box.appendChild(it);
+    });
+  }
+
+  /* ---------- tabs + QR links ---------- */
+  document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+    if (b.dataset.tab === "vGive") $("btnCancel").onclick();
+    show(b.dataset.tab);
+  });
+
+  function checkLink() {
+    const m = location.hash.match(/give=([A-Za-z0-9_]+)/);
+    if (!m) return;
+    history.replaceState(null, "", location.pathname);
+    if (me) { show("vGive"); openByName(m[1]); }
+    else pendingGive = m[1];
+  }
+  window.addEventListener("hashchange", checkLink);
+  checkLink();
+</script>
+</body>
+</html>
