@@ -3,15 +3,7 @@ service cloud.firestore {
   match /databases/{db}/documents {
 
     function signedIn() { return request.auth != null; }
-
-    // "Today" in Central time (UTC-5). Budgets reset at midnight Central.
-    function today() {
-      let t = request.time - duration.value(5, 'h');
-      return string(t.year()) + '-' + string(t.month()) + '-' + string(t.day());
-    }
-
     function userPath(uid) { return /databases/$(db)/documents/users/$(uid); }
-    function budgetPath(uid) { return /databases/$(db)/documents/budgets/$(uid + '_' + today()); }
 
     // ---------- Profiles ----------
     match /users/{uid} {
@@ -41,44 +33,25 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ---------- Daily sending budget (100 per day) ----------
-    match /budgets/{bid} {
-      allow read: if signedIn() && bid.matches('^' + request.auth.uid + '_.*');
-      allow create: if signedIn() && bid == request.auth.uid + '_' + today()
-        && request.resource.data.keys().hasOnly(['uid', 'day', 'used'])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.day == today()
-        && request.resource.data.used is int
-        && request.resource.data.used >= 1 && request.resource.data.used <= 100;
-      allow update: if signedIn() && bid == request.auth.uid + '_' + today()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used'])
-        && request.resource.data.used is int
-        && request.resource.data.used > resource.data.used
-        && request.resource.data.used <= 100;
-      allow delete: if false;
-    }
-
-    // ---------- Cool points sent (positive only, permanent) ----------
-    match /gives/{id} {
+    // ---------- Ratings: one per person per person, 1-100, can be updated ----------
+    // Document id is "<raterId>_<ratedId>", so each person can only ever have
+    // one rating for someone else.
+    match /ratings/{rid} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['from', 'fromName', 'to', 'toName', 'amount', 'note', 'day', 'at'])
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'fromName', 'to', 'toName', 'score', 'note', 'at'])
         && request.resource.data.from == request.auth.uid
         && request.resource.data.to is string
         && request.resource.data.to != request.auth.uid
+        && rid == request.auth.uid + '_' + request.resource.data.to
         && exists(userPath(request.resource.data.to))
         && request.resource.data.fromName == get(userPath(request.auth.uid)).data.username
         && request.resource.data.toName == get(userPath(request.resource.data.to)).data.username
-        && request.resource.data.amount is int
-        && request.resource.data.amount >= 1 && request.resource.data.amount <= 100
+        && request.resource.data.score is int
+        && request.resource.data.score >= 1 && request.resource.data.score <= 100
         && request.resource.data.note is string && request.resource.data.note.size() <= 140
-        && request.resource.data.day == today()
-        && request.resource.data.at == request.time
-        // the sender's budget must go up by exactly this amount, in the same save
-        && getAfter(budgetPath(request.auth.uid)).data.used ==
-             (exists(budgetPath(request.auth.uid)) ? get(budgetPath(request.auth.uid)).data.used : 0)
-             + request.resource.data.amount;
-      allow update, delete: if false;
+        && request.resource.data.at == request.time;
+      allow delete: if false;
     }
   }
 }
